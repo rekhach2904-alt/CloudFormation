@@ -16,7 +16,7 @@ pipeline {
 
         string(
             name: 'BUCKET_NAME',
-            defaultValue: 'aman-rathor-demo-bucket',
+            defaultValue: "demo-bucket-${env.BUILD_NUMBER}",
             description: 'Unique S3 Bucket Name'
         )
 
@@ -40,23 +40,39 @@ pipeline {
             }
         }
 
+        stage('Cleanup Old Stack') {
+            steps {
+                sh """
+                aws cloudformation delete-stack \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION} || true
+                """
+
+                sh """
+                aws cloudformation wait stack-delete-complete \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION} || true
+                """
+            }
+        }
+
         stage('Create S3 Bucket') {
             steps {
                 echo "Creating CloudFormation Stack..."
 
                 sh """
-                    aws cloudformation deploy \
-                    --stack-name ${params.STACK_NAME} \
-                    --template-file ${params.TEMPLATE_FILE} \
-                    --region ${params.REGION} \
-                    --parameter-overrides BucketName=${params.BUCKET_NAME}
+                aws cloudformation deploy \
+                  --stack-name ${params.STACK_NAME} \
+                  --template-file ${params.TEMPLATE_FILE} \
+                  --region ${params.REGION} \
+                  --parameter-overrides BucketName=${params.BUCKET_NAME}
                 """
             }
         }
 
         stage('Wait 2 Minutes') {
             steps {
-                echo "Waiting 2 minutes before deleting the stack..."
+                echo "Waiting 2 minutes..."
                 sleep(time: 2, unit: 'MINUTES')
             }
         }
@@ -66,15 +82,15 @@ pipeline {
                 echo "Deleting CloudFormation Stack..."
 
                 sh """
-                    aws cloudformation delete-stack \
-                    --stack-name ${params.STACK_NAME} \
-                    --region ${params.REGION}
+                aws cloudformation delete-stack \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION}
                 """
 
                 sh """
-                    aws cloudformation wait stack-delete-complete \
-                    --stack-name ${params.STACK_NAME} \
-                    --region ${params.REGION}
+                aws cloudformation wait stack-delete-complete \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION}
                 """
             }
         }
@@ -82,15 +98,15 @@ pipeline {
 
     post {
         success {
-            echo "S3 bucket created and deleted successfully."
+            echo 'S3 bucket created and deleted successfully.'
         }
 
         failure {
-            echo "Pipeline failed."
+            echo 'Pipeline failed.'
         }
 
         always {
-            echo "Pipeline execution completed."
+            echo 'Pipeline execution completed.'
         }
     }
 }
