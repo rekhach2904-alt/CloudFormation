@@ -2,10 +2,29 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'STACK_NAME', defaultValue: 's3-stack', description: 'CloudFormation Stack Name')
-        string(name: 'TEMPLATE_FILE', defaultValue: '01_s3cft.yml', description: 'CloudFormation Template File')
-        string(name: 'BUCKET_NAME', defaultValue: 'my-custom-bucket-0718', description: 'S3 Bucket Name')
-        choice(name: 'REGION', choices: ['us-east-1', 'us-west-1', 'ap-south-1'], description: 'AWS Region')
+        string(
+            name: 'STACK_NAME',
+            defaultValue: 's3-stack',
+            description: 'CloudFormation Stack Name'
+        )
+
+        string(
+            name: 'TEMPLATE_FILE',
+            defaultValue: '01_s3cft.yml',
+            description: 'CloudFormation Template File'
+        )
+
+        string(
+            name: 'BUCKET_NAME',
+            defaultValue: 'aman-rathor-demo-bucket',
+            description: 'Unique S3 Bucket Name'
+        )
+
+        choice(
+            name: 'REGION',
+            choices: ['us-east-1', 'us-west-1', 'ap-south-1'],
+            description: 'AWS Region'
+        )
     }
 
     environment {
@@ -13,25 +32,65 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout Repository') {
             steps {
-                git branch: 'main', url: 'https://github.com/riteshbehal/CloudFormation.git'
+                git branch: 'main',
+                    url: 'https://github.com/riteshbehal/CloudFormation.git'
             }
         }
 
-        stage('Deploy S3 Stack') {
+        stage('Create S3 Bucket') {
             steps {
-                script {
-                    echo "Running CloudFormation deployment for S3..."
-                    sh """
-                        aws cloudformation deploy \
-                          --stack-name ${params.STACK_NAME} \
-                          --template-file ${params.TEMPLATE_FILE} \
-                          --region ${params.REGION} \
-                          --parameter-overrides BucketName=${params.BUCKET_NAME}
-                    """
-                }
+                echo "Creating CloudFormation Stack..."
+
+                sh """
+                    aws cloudformation deploy \
+                    --stack-name ${params.STACK_NAME} \
+                    --template-file ${params.TEMPLATE_FILE} \
+                    --region ${params.REGION} \
+                    --parameter-overrides BucketName=${params.BUCKET_NAME}
+                """
             }
+        }
+
+        stage('Wait 2 Minutes') {
+            steps {
+                echo "Waiting 2 minutes before deleting the stack..."
+                sleep(time: 2, unit: 'MINUTES')
+            }
+        }
+
+        stage('Delete Stack') {
+            steps {
+                echo "Deleting CloudFormation Stack..."
+
+                sh """
+                    aws cloudformation delete-stack \
+                    --stack-name ${params.STACK_NAME} \
+                    --region ${params.REGION}
+                """
+
+                sh """
+                    aws cloudformation wait stack-delete-complete \
+                    --stack-name ${params.STACK_NAME} \
+                    --region ${params.REGION}
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "S3 bucket created and deleted successfully."
+        }
+
+        failure {
+            echo "Pipeline failed."
+        }
+
+        always {
+            echo "Pipeline execution completed."
         }
     }
 }
