@@ -2,10 +2,29 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'STACK_NAME', defaultValue: 'ec2-stack', description: 'CloudFormation Stack Name')
-        string(name: 'TEMPLATE_FILE', defaultValue: '02_ec2cft.yml', description: 'CloudFormation Template File')
-        string(name: 'INSTANCE_NAME', defaultValue: 'my-ec2-instance', description: 'EC2 Instance Name')
-        choice(name: 'REGION', choices: ['us-east-1', 'us-west-1', 'ap-south-1'], description: 'AWS Region')
+        string(
+            name: 'STACK_NAME',
+            defaultValue: 'ec2-stack',
+            description: 'CloudFormation Stack Name'
+        )
+
+        string(
+            name: 'TEMPLATE_FILE',
+            defaultValue: '02_ec2cft.yml',
+            description: 'CloudFormation Template File'
+        )
+
+        string(
+            name: 'INSTANCE_NAME',
+            defaultValue: 'my-ec2-instance',
+            description: 'EC2 Instance Name'
+        )
+
+        choice(
+            name: 'REGION',
+            choices: ['us-east-1', 'us-west-1', 'ap-south-1'],
+            description: 'AWS Region'
+        )
     }
 
     environment {
@@ -13,25 +32,81 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout Repository') {
             steps {
-                git branch: 'main', url: 'https://github.com/riteshbehal/CloudFormation.git'
+                git branch: 'main',
+                    url: 'https://github.com/riteshbehal/CloudFormation.git'
             }
         }
 
-        stage('Deploy EC2 Stack') {
+        stage('Cleanup Old Stack') {
             steps {
-                script {
-                    echo "Running CloudFormation deployment for EC2..."
-                    sh """
-                        aws cloudformation deploy \
-                          --stack-name ${params.STACK_NAME} \
-                          --template-file ${params.TEMPLATE_FILE} \
-                          --region ${params.REGION} \
-                          --parameter-overrides InstanceName=${params.INSTANCE_NAME}
-                    """
-                }
+                sh """
+                aws cloudformation delete-stack \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION} || true
+                """
+
+                sh """
+                aws cloudformation wait stack-delete-complete \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION} || true
+                """
             }
+        }
+
+        stage('Create EC2 Instance') {
+            steps {
+                echo "Creating CloudFormation Stack..."
+
+                sh """
+                aws cloudformation deploy \
+                  --stack-name ${params.STACK_NAME} \
+                  --template-file ${params.TEMPLATE_FILE} \
+                  --region ${params.REGION} \
+                  --parameter-overrides InstanceName=${params.INSTANCE_NAME}
+                """
+            }
+        }
+
+        stage('Wait 5 Minutes') {
+            steps {
+                echo "Waiting 5 minutes before deleting the EC2 instance..."
+                sleep(time: 5, unit: 'MINUTES')
+            }
+        }
+
+        stage('Delete Stack') {
+            steps {
+                echo "Deleting CloudFormation Stack..."
+
+                sh """
+                aws cloudformation delete-stack \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION}
+                """
+
+                sh """
+                aws cloudformation wait stack-delete-complete \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION}
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'EC2 instance created and deleted successfully.'
+        }
+
+        failure {
+            echo 'Pipeline failed.'
+        }
+
+        always {
+            echo 'Pipeline execution completed.'
         }
     }
 }
