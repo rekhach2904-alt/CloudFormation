@@ -16,7 +16,7 @@ pipeline {
 
         string(
             name: 'BUCKET_NAME',
-            defaultValue: "new1-bucket-${env.BUILD_NUMBER}",
+            defaultValue: "new_data-bucket-${env.BUILD_NUMBER}",
             description: 'Unique S3 Bucket Name'
         )
 
