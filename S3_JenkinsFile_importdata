@@ -1,0 +1,124 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(
+            name: 'STACK_NAME',
+            defaultValue: 's3-stack',
+            description: 'CloudFormation Stack Name'
+        )
+
+        string(
+            name: 'TEMPLATE_FILE',
+            defaultValue: '01_s3cft.yml',
+            description: 'CloudFormation Template File'
+        )
+
+        string(
+            name: 'BUCKET_NAME',
+            defaultValue: "new1-bucket-${env.BUILD_NUMBER}",
+            description: 'Unique S3 Bucket Name'
+        )
+
+        choice(
+            name: 'REGION',
+            choices: ['us-east-1', 'us-west-1', 'ap-south-1'],
+            description: 'AWS Region'
+        )
+    }
+
+    environment {
+        AWS_DEFAULT_REGION = "${params.REGION}"
+    }
+
+    stages {
+
+        stage('Checkout Repository') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/rekhach2904-alt/CloudFormation.git'
+            }
+        }
+
+        stage('Cleanup Old Stack') {
+            steps {
+                sh """
+                aws cloudformation delete-stack \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION} || true
+                """
+
+                sh """
+                aws cloudformation wait stack-delete-complete \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION} || true
+                """
+            }
+        }
+
+        stage('Create S3 Bucket') {
+            steps {
+                echo "Creating CloudFormation Stack..."
+
+                sh """
+                aws cloudformation deploy \
+                  --stack-name ${params.STACK_NAME} \
+                  --template-file ${params.TEMPLATE_FILE} \
+                  --region ${params.REGION} \
+                  --parameter-overrides BucketName=${params.BUCKET_NAME}
+                """
+            }
+        }
+
+        stage('Insert Data into S3 Bucket') {
+            steps {
+                echo "Uploading sample data into S3 bucket..."
+
+                // Example: upload a file from your repo/workspace
+                sh """
+                echo "Hello Rekha, this is test data!" > sample.txt
+                aws s3 cp sample.txt s3://${params.BUCKET_NAME}/sample.txt
+                """
+            }
+        }
+
+        stage('Wait 2 Minutes') {
+            steps {
+                echo "Waiting 2 minutes..."
+                sleep(time: 2, unit: 'MINUTES')
+            }
+        }
+
+        stage('Delete Stack') {
+            steps {
+                echo "Deleting CloudFormation Stack..."
+
+                sh """
+                aws cloudformation delete-stack \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION}
+                """
+
+                sh """
+                aws cloudformation wait stack-delete-complete \
+                  --stack-name ${params.STACK_NAME} \
+                  --region ${params.REGION}
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'S3 bucket created, data inserted, and deleted successfully.'
+        }
+
+        failure {
+            echo 'Pipeline failed.'
+        }
+
+        always {
+            echo 'Pipeline execution completed.'
+        }
+    }
+}
