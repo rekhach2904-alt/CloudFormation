@@ -73,7 +73,7 @@ pipeline {
         stage('Wait 2 Minutes') {
             steps {
                 echo "Waiting 2 minutes..."
-                sleep(time: 2, unit: 'MINUTES')
+                sleep(time: 10, unit: 'MINUTES')
             }
         }
 
