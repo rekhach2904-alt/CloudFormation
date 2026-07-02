@@ -36,7 +36,7 @@ pipeline {
         stage('Checkout Repository') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/riteshbehal/CloudFormation.git'
+                    url: 'https://github.com/rekhach2904-alt/CloudFormation.git'
             }
         }
 
